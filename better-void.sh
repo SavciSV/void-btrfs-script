@@ -1,17 +1,18 @@
 #!/bin/bash
 
-# Check if script is ran as root or not.
+# Check if script is running as root or not.
 if [ "$(id -u)" -ne 0 ]; then
     echo "Please run this script as root."
     exit 1
 fi
+
 
 # List block devices.
 cd /
 lsblk
 
 # Ask user for prompt.
-read -rp "Enter the disk name (WARNING: ALL DATA ON THAT DISK WILL GET DELETED) (e.g. sda, nvme0n1): " disk
+read -rp "Enter the disk name (e.g. sda, nvme0n1): " disk
 
 # Safety check
 if [ ! -b "/dev/$disk" ]; then
@@ -19,46 +20,94 @@ if [ ! -b "/dev/$disk" ]; then
     exit 1
 fi
 
-# Setting new partition table and partitioning the disk.
-fdisk "/dev/$disk" <<EOF
-g
-n
-1
-
-+256M
-t
-1
-n
-2
-
-+1G
-n
-3
-
-
-w
-EOF
-
-echo "Partitioning is done successfully."
-
-
-# Formatting new partitions.
+# Compatibility with NVMe disks.
 if [[ $disk =~ [0-9]$ ]]; then
     p="p"
 else
     p=""
 fi
 
-mkfs.vfat -F32 "/dev/${disk}${p}1"
-mkfs.ext4 "/dev/${disk}${p}2"
-mkfs.btrfs "/dev/${disk}${p}3"
 
-echo "Formatting is done successfully."
-sleep 3
-clear
-echo "Proceed in the installer and choose the disks for /, /boot, /boot/efi without formatting and don't reboot after, but exit the installer."
-sleep 15
-void-installer
+# Function of Partitioning and Formatting if the user wants it.
+partitionAndFormat()
+{
+    # Setting root, boot, and efi partiitons values to the known ones.
+    efipar=1
+    bootpar=2
+    rootpar=3
+
+
+    # Setting new partition table and partitioning the disk.
+    fdisk "/dev/$disk" <<EOF
+    g
+    n
+    1
+
+    +256M
+    t
+    1
+    n
+    2
+
+    +1G
+    n
+    3
+
+
+    w
+EOF
+
+    echo "Partitioning is done successfully."
+
+    # Formatting new partitions.
+    mkfs.vfat -F32 "/dev/${disk}${p}${efipar}"
+    mkfs.ext4 "/dev/${disk}${p}${bootpar}"
+    mkfs.btrfs "/dev/${disk}${p}${rootpar}"
+
+    echo "Formatting is done successfully."
+    sleep 2
+    clear
+    echo "Proceed in the installer and choose the disks for /, /boot, /boot/efi without formatting and don't reboot after, but exit the installer."
+    sleep 15
+    void-installer
+}
+
+
+# If user chose to not format.
+doNotFormat()
+{
+    clear
+    echo "Make sure to have 3 partiitons for your void installer, a FAT32 recommended 256MiB for your efi, a ext4 recommended 2GiB for your boot, a btrfs one for your root."
+    sleep 15
+    void-installer
+    clear
+    lsblk -f
+    read -p "What is your root partition's number (if \"sda1\" then type \"1\", if \"nvme0n1p3\" then type \"3\" and so on): " rootpar
+    read -p "What is your boot partition's number: " bootpar
+    read -p "What is your efi partition's number: " efipar
+}
+
+
+# See installation method preferred by user.
+while true; do
+    read -rp "Format the entire disk? [y/n] (other answers stop the script): " answer
+    case "$answer" in
+        [Yy])
+            partitionAndFormat
+            break
+            ;;
+        [Nn])
+            echo "Please have a root, boot, and efi partitions and specify each of them"
+            sleep 7
+            doNotFormat
+            break
+            ;;
+        *)
+            echo "Invalid input, exiting the script."
+            exit 1
+            ;;
+    esac
+done
 
 
 # Mount the new root.
@@ -66,7 +115,7 @@ cd /
 umount -R /mnt/*
 umount -R /mnt
 rm -rf /mnt/*
-mount /dev/vda3 /mnt
+mount /dev/${disk}${p}${rootpar} /mnt
 
 # Move its content to a subvolume.
 btrfs subvolume create /mnt/@
@@ -80,9 +129,9 @@ sleep 2
 
 
 # Setup /etc/fstab.
-uuid_efi=$(blkid -s UUID -o value /dev/${disk}${p}1)
-uuid_boot=$(blkid -s UUID -o value /dev/${disk}${p}2)
-uuid_root=$(blkid -s UUID -o value /dev/${disk}${p}3)
+uuid_efi=$(blkid -s UUID -o value /dev/${disk}${p}${efipar})
+uuid_boot=$(blkid -s UUID -o value /dev/${disk}${p}${bootpar})
+uuid_root=$(blkid -s UUID -o value /dev/${disk}${p}${rootpar})
 
 rm /mnt/@/etc/fstab
 
@@ -98,10 +147,10 @@ EOF
 # Remount partitions in the correct way.
 umount -R /mnt
 
-mount "/dev/${disk}${p}3" /mnt -o subvol=@
-mount "/dev/${disk}${p}3" /mnt/home -o subvol=@home
-mount "/dev/${disk}${p}2" /mnt/boot
-mount "/dev/${disk}${p}1" /mnt/boot/efi
+mount "/dev/${disk}${p}${rootpar}" /mnt -o subvol=@
+mount "/dev/${disk}${p}${rootpar}" /mnt/home -o subvol=@home
+mount "/dev/${disk}${p}${bootpar}" /mnt/boot
+mount "/dev/${disk}${p}${efipar}" /mnt/boot/efi
 
 mount --bind /dev /mnt/dev
 mount --bind /sys /mnt/sys
