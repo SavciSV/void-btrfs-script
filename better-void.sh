@@ -97,8 +97,6 @@ while true; do
             break
             ;;
         [Nn])
-            echo "Please have a root, boot, and efi partitions and specify each of them"
-            sleep 7
             doNotFormat
             break
             ;;
