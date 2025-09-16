@@ -150,14 +150,14 @@ mount "/dev/${disk}${p}${rootpar}" /mnt/home -o subvol=@home
 mount "/dev/${disk}${p}${bootpar}" /mnt/boot
 mount "/dev/${disk}${p}${efipar}" /mnt/boot/efi
 
-mount --bind /dev /mnt/dev
-mount --bind /sys /mnt/sys
-mount --bind /proc /mnt/proc
-mount -t efivarfs efivarfs /mnt/sys/firmware/efi/efivars
+mount -t proc /proc /mnt/proc
+mount --rbind /dev /mnt/dev
+mount --make-rslave /mnt/dev
+mount --rbind /sys /mnt/sys
+mount --make-rslave /mnt/sys
 
 
 # Chroot and install grub.
-rm -rf /mnt/boot/efi/*
 chroot /mnt /bin/bash <<'EOF'
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=Void
 grub-mkconfig -o /boot/grub/grub.cfg
