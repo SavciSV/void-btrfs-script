@@ -67,7 +67,7 @@ EOF
     echo "Formatting is done successfully."
     sleep 2
     clear
-    echo "Proceed in the installer and choose the disks for /, /boot, /boot/efi without formatting and don't reboot after, but exit the installer."
+    echo "The script will automatically proceed in the installer, choose the disks for /, /boot, /boot/efi without formatting and don't reboot after, but exit the installer."
     sleep 15
     void-installer
 }
@@ -77,7 +77,7 @@ EOF
 doNotFormat()
 {
     clear
-    echo "Make sure to have 3 partiitons for your void installer, a FAT32 recommended 256MiB for your efi, a ext4 recommended 2GiB for your boot, a btrfs one for your root."
+    echo "Make sure to have 3 partiitons for your void installer, a FAT32 recommended 256MiB for your efi, a ext4 recommended 1GiB for your boot, a btrfs one for your root."
     sleep 15
     void-installer
     clear
@@ -90,7 +90,7 @@ doNotFormat()
 
 # See installation method preferred by user.
 while true; do
-    read -rp "Format the entire disk? [y/n] (other answers stop the script): " answer
+    read -rp "Format the entire disk? [y/n] (other answers will stop the script): " answer
     case "$answer" in
         [Yy])
             partitionAndFormat
@@ -110,14 +110,14 @@ done
 
 # Mount the new root.
 cd /
-umount -R /mnt/*
-umount -R /mnt
-rm -rf /mnt/*
+umount -R /mnt/* 2>/dev/null
+umount -R /mnt 2>/dev/null
+rm -rf /mnt/* 2>/dev/null
 mount /dev/${disk}${p}${rootpar} /mnt
 
 # Move its content to a subvolume.
 btrfs subvolume create /mnt/@
-mv /mnt/* /mnt/@
+mv /mnt/* /mnt/@ 2>/dev/null
 
 # Create another home subvolume.
 btrfs subvolume create /mnt/@home
